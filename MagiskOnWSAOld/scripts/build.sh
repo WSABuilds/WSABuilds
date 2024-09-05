@@ -593,40 +593,23 @@ EOF
     done
     echo -e "Integrate Magisk done\n"
 elif [ "$ROOT_SOL" = "kernelsu" ]; then
-    echo "Copy KernelSU kernel"
+    echo "Extracting KernelSU"
+    # shellcheck disable=SC1090
+    source "${KERNELSU_INFO:?}" || abort
+    echo "WSA Kernel Version: $KERNEL_VER"
+    echo "KernelSU Version: $KERNELSU_VER"
+    if ! unzip "$KERNELSU_PATH" -d "$WORK_DIR/kernelsu"; then
+        CLEAN_DOWNLOAD_KERNELSU=1
+        abort "Unzip KernelSU failed, package is corrupted?"
+    fi
+    if [ "$ARCH" = "x64" ]; then
+        mv "$WORK_DIR/kernelsu/bzImage" "$WORK_DIR/kernelsu/kernel"
+    elif [ "$ARCH" = "arm64" ]; then
+        mv "$WORK_DIR/kernelsu/Image" "$WORK_DIR/kernelsu/kernel"
+    fi
+    echo "Integrate KernelSU"
+    mv "$WORK_DIR/wsa/$ARCH/Tools/kernel" "$WORK_DIR/wsa/$ARCH/Tools/kernel_origin"
     cp "$WORK_DIR/kernelsu/kernel" "$WORK_DIR/wsa/$ARCH/Tools/kernel"
-    echo -e "Copy KernelSU kernel done\n"
-    echo "Add auto-install script for KernelSU Manager"
-    # Copy APK
-    DAT_APP="$SYSTEM_MNT/data-app"
-    sudo mkdir "$DAT_APP"
-    sudo cp -f "$KERNELSU_APK_PATH" "$DAT_APP/"
-    sudo chmod 0755 "$DAT_APP/"
-    sudo chmod 0644 "$DAT_APP/KernelSU.apk"
-    sudo find "$DAT_APP/" -exec chown root:root {} \;
-    sudo find "$DAT_APP/" -exec setfattr -n security.selinux -v "u:object_r:system_file:s0" {} \; || abort
-    # Setup script
-    KSU_PRE="$SYSTEM_MNT/bin/ksuinstall"
-    sudo tee -a "$KSU_PRE" <<EOF >/dev/null || abort
-#!/system/bin/sh
-umask 022
-echo "\nKernelSU Install Manager"
-if [ ! -e "/storage/emulated/0/.ksu_completed_$KERNELSU_VER" ]; then
-    echo "\nInstalling KernelSU APK"
-    pm install -i android -r /system/data-app/KernelSU.apk
-    touch "/storage/emulated/0/.ksu_completed_$KERNELSU_VER"
-    echo "\nDone!\n"
-else
-    echo "\nLatest KernelSU Manager is installed.\n"
-fi
-echo "\nLaunching KernelSU App\n"
-am start -n me.weishu.kernelsu/.ui.MainActivity
-EOF
-    # Grant access
-    sudo chmod 0755 "$KSU_PRE"
-    sudo chown 0:2000 "$KSU_PRE"
-    sudo setfattr -n security.selinux -v "u:object_r:system_file:s0" "$KSU_PRE" || abort
-    echo -e "Add KernelSU Manager done\n"
 fi
 
 echo "Add extra packages"
